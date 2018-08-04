@@ -23,7 +23,7 @@ public class TransitionScheduler extends BroadcastReceiver {
     // which doesn't match the contstant of *any* of the PendingIntent flags..
     static final int FLAG = PendingIntent.FLAG_UPDATE_CURRENT;
     
-    // Runs the animation between the given times, *only* when the screen is on
+    // Runs the animation at the given time, *only* when the screen is on
     // Returns an id for the job
     public int schedule(Context context, Animator animation, long startAtMillis) {
         // TODO: Persist these values so you can *actually* use this to schedule
