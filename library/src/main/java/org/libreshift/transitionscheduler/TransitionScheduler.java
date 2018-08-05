@@ -14,10 +14,10 @@ import android.util.Log;
 public class TransitionScheduler extends BroadcastReceiver {
 
     static final String ACTION_ALARM = "com.libreshift.timer.ACTION_ALARM";
-    static final String TAG = "com.libreshift.timer.ValueAnimatorScheduler";
+    static final String TAG = "com.libreshift.timer.TransitionScheduler";
 
     long startAt;
-    Animator animator;
+    ValueAnimator animator;
 
     // Is UPDATE_CURRENT the right flag? Red Moon was using the constant '0',
     // which doesn't match the contstant of *any* of the PendingIntent flags..
@@ -25,13 +25,13 @@ public class TransitionScheduler extends BroadcastReceiver {
     
     // Runs the animation at the given time, *only* when the screen is on
     // Returns an id for the job
-    public int schedule(Context context, Animator animation, long startAtMillis) {
+    public int schedule(Context context, ValueAnimator animation, long startAtMillis) {
         // TODO: Persist these values so you can *actually* use this to schedule
         startAt = startAtMillis;
         animator = animation;
 
         int id = newUniqueId();
-        PendingIntent pi = getIntent(id);
+        PendingIntent pi = getIntent(context, id);
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {
             // What is the right AlarmManager callback to use here?
@@ -46,7 +46,7 @@ public class TransitionScheduler extends BroadcastReceiver {
         if (id == 0) {
             AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (am != null) {
-                PendingIntent pi = getIntent(id);
+                PendingIntent pi = getIntent(context, id);
                 am.cancel(pi);
             }
         }
@@ -56,20 +56,21 @@ public class TransitionScheduler extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         // TODO: Reschedule alarms on boot
+        long delay;
         switch (action) {
             case ACTION_ALARM:
                 int id = Integer.parseInt(intent.getData().toString());
-                animation.addListener(new TransitionListener(context, id));
-                long delay = System.currentTimeMillis() - startAt;
+                animator.addListener(new TransitionListener(context, this, id));
+                delay = System.currentTimeMillis() - startAt;
                 animator.setCurrentPlayTime(delay);
                 animator.start();
                 break;
             case Intent.ACTION_SCREEN_ON:
                 Log.d(TAG, "Screen turned on");
-                long delay = System.currentTimeMillis() - startAt;
+                delay = System.currentTimeMillis() - startAt;
                 animator.setCurrentPlayTime(delay);
                 if (animator.isPaused()) {
-                    animator.resume()
+                    animator.resume();
                 }
                 break;
             case Intent.ACTION_SCREEN_OFF:
@@ -86,7 +87,7 @@ public class TransitionScheduler extends BroadcastReceiver {
         return 0;
     }
 
-    PendingIntent getIntent(int id) {
+    PendingIntent getIntent(Context context, int id) {
         // We need the id in the data field so each is unique, for AlarmManager
         Uri data = Uri.parse(Integer.toString(id));
         Intent intent = new Intent(ACTION_ALARM, data, context, this.getClass());
@@ -105,7 +106,7 @@ public class TransitionScheduler extends BroadcastReceiver {
         }
 
         public void onAnimationStart(Animator animation) {
-            IntentFilter filter = IntentFilter();
+            IntentFilter filter = new IntentFilter();
             filter.addAction(Intent.ACTION_SCREEN_OFF);
             filter.addAction(Intent.ACTION_SCREEN_ON);
             context.registerReceiver(receiver, filter);
