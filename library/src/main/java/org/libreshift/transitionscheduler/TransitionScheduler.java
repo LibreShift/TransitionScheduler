@@ -1,4 +1,4 @@
-package com.libreshift;
+package com.libreshift.transition;
 
 import android.animation.Animator;
 import android.animation.ValueAnimator;
@@ -8,114 +8,94 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.util.Log;
 
-public class TransitionScheduler extends BroadcastReceiver {
+public abstract class TransitionScheduler extends BroadcastReceiver {
 
-    static final String ACTION_ALARM = "com.libreshift.timer.ACTION_ALARM";
-    static final String TAG = "com.libreshift.timer.TransitionScheduler";
+    static final String TAG = "com.libreshift.transition.TransitionScheduler";
+    static final String ACTION_ALARM = "com.libreshift.transition.ACTION_ALARM";
+    static final String EXTRA_START = "com.libreshift.transition.EXTRA_START";
 
-    long startAt;
-    ValueAnimator animator;
+    abstract ValueAnimator newAnimation(String id);
 
     // Is UPDATE_CURRENT the right flag? Red Moon was using the constant '0',
     // which doesn't match the contstant of *any* of the PendingIntent flags..
     static final int FLAG = PendingIntent.FLAG_UPDATE_CURRENT;
-    
-    // Runs the animation at the given time, *only* when the screen is on
-    // Returns an id for the job
-    public int schedule(Context context, ValueAnimator animation, long startAtMillis) {
-        // TODO: Persist these values so you can *actually* use this to schedule
-        startAt = startAtMillis;
-        animator = animation;
 
-        int id = newUniqueId();
-        PendingIntent pi = getIntent(context, id);
-        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am != null) {
-            // What is the right AlarmManager callback to use here?
-            // How is setExactAndAllowWhileIdle different from setExact with RTC_WAKEUP?
-            // Is RTC_WAKEUP necessary or would AlarmManger.RTC be okay?
-            am.setExact(AlarmManager.RTC_WAKEUP, startAtMillis, pi);
+    // TODO: Store more than one transition at once.
+    Transition transition = null;
+    
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+        switch (action) {
+            case ACTION_ALARM:
+                String id = intent.getDataString()
+                long start = intent.getIntExtra(EXTRA_START);
+                ValueAnimator animator = newAnimation(id);
+                transition = new Transition(context, animator, start);
+                transition.start();
+                break;
+            case Intent.ACTION_BOOT_COMPLETED:
+                reschedule(context);
+                break;
         }
-        return id;
     }
 
-    public void cancel(Context context, int id) {
-        if (id == 0) {
-            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-            if (am != null) {
-                PendingIntent pi = getIntent(context, id);
-                am.cancel(pi);
+    // Passing an id of an alarm that is already scheduled will overwrite that alarm
+    public static void schedule(Context context, String id, long startAtMillis) {
+        // TODO: If there's already an alarm scheduled, should we return the old time?
+
+        // TODO: If startAtMillis is in the past, start the transition right away
+        SharedPreferences prefs = context.getPrefs(context);
+        prefs.edit().putLong(id, startAtMillis).apply();
+
+        Uri data = Uri.parse(id);
+        Intent intent = new Intent(ACTION_ALARM, data, context, this.getClass());
+        intent.putExtra(EXTRA_START, startAtMillis);
+        PendingIntent pi = PendingIntent.getBroadcast(context, id, intent, FLAG);
+
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) {
+            am.setExact(AlarmManager.RTC_WAKEUP, startAtMillis, pi);
+        }
+    }
+
+    public static void cancel(Context context, String id) {
+        Uri data = Uri.parse(id);
+        Intent intent = new Intent(ACTION_ALARM, data, context, this.getClass());
+        PendingIntent pi = PendingIntent.getBroadcast(context, id, intent, FLAG);
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) {
+            am.cancel(pi);
+        }
+
+        SharedPreferences prefs = getPrefs(context);
+        prefs.edit().remove(id).apply();
+
+        if (transition != null) {
+            transition.cancel();
+            transition = null;
+        }
+    }
+
+    static void reschedule(Context context) {
+        SharedPreferences prefs = getPrefs(context);
+        for (String id : prefs.getAll().keySet()) {
+            Long startTime = prefs.getLong(id, null);
+            if (startTime != null) {
+                schedule(context, id, startTime);
+            } else {
+                Log.e(TAG, "Couldn't get start time for alarm: " + id);
             }
         }
     }
 
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        // TODO: Reschedule alarms on boot
-        long delay;
-        switch (action) {
-            case ACTION_ALARM:
-                int id = Integer.parseInt(intent.getData().toString());
-                animator.addListener(new TransitionListener(context, this, id));
-                delay = System.currentTimeMillis() - startAt;
-                animator.setCurrentPlayTime(delay);
-                animator.start();
-                break;
-            case Intent.ACTION_SCREEN_ON:
-                Log.d(TAG, "Screen turned on");
-                delay = System.currentTimeMillis() - startAt;
-                animator.setCurrentPlayTime(delay);
-                if (animator.isPaused()) {
-                    animator.resume();
-                }
-                break;
-            case Intent.ACTION_SCREEN_OFF:
-                Log.d(TAG, "Screen turned off");
-                if (animator.isRunning()) {
-                    animator.pause();
-                }
-                break;
-        }
+    static SharedPreferences getPrefs(Context context) {
+        return context.getSharedPreferences(PREFERENCE, Context.MODE_PRIVATE);
     }
 
-    int newUniqueId() {
-        // TODO: generate unique id
-        return 0;
-    }
-
-    PendingIntent getIntent(Context context, int id) {
-        // We need the id in the data field so each is unique, for AlarmManager
-        Uri data = Uri.parse(Integer.toString(id));
-        Intent intent = new Intent(ACTION_ALARM, data, context, this.getClass());
-        return PendingIntent.getBroadcast(context, id, intent, FLAG);
-    }
-
-    private class TransitionListener implements Animator.AnimatorListener {
-        int id;
-        Context context;
-        BroadcastReceiver receiver;
-
-        TransitionListener(Context ctx, BroadcastReceiver rcv, int n) {
-            id = n;
-            context = ctx;
-            receiver = rcv;
-        }
-
-        public void onAnimationStart(Animator animation) {
-            IntentFilter filter = new IntentFilter();
-            filter.addAction(Intent.ACTION_SCREEN_OFF);
-            filter.addAction(Intent.ACTION_SCREEN_ON);
-            context.registerReceiver(receiver, filter);
-        }
-        public void onAnimationEnd(Animator animation) {
-            context.unregisterReceiver(receiver);
-        }
-        public void onAnimationCancel(Animator animation) {}
-        public void onAnimationRepeat(Animator animation) {}
-        // public void onAnimationUpdate(ValueAnimator animation) {}
-    }
+    static final String PREFERENCE = "com.libreshift.transition.preference";
 }
