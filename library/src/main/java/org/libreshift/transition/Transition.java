@@ -1,4 +1,4 @@
-package com.libreshift.transition;
+package org.libreshift.transition;
 
 import android.animation.Animator;
 import android.animation.ValueAnimator;

@@ -1,4 +1,4 @@
-package com.libreshift.transition;
+package org.libreshift.transition;
 
 import android.animation.Animator;
 import android.animation.ValueAnimator;
@@ -15,8 +15,8 @@ import android.util.Log;
 public abstract class TransitionScheduler extends BroadcastReceiver {
 
     static final String TAG = "TransitionScheduler";
-    static final String ACTION_ALARM = "com.libreshift.transition.ACTION_ALARM";
-    static final String EXTRA_START = "com.libreshift.transition.EXTRA_START";
+    static final String ACTION_ALARM = "org.libreshift.transition.ACTION_ALARM";
+    static final String EXTRA_START = "org.libreshift.transition.EXTRA_START";
 
     abstract ValueAnimator newAnimation(String id);
 
@@ -97,5 +97,5 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
         return context.getSharedPreferences(PREFERENCE, Context.MODE_PRIVATE);
     }
 
-    static final String PREFERENCE = "com.libreshift.transition.preference";
+    static final String PREFERENCE = "org.libreshift.transition.preference";
 }
