@@ -14,7 +14,7 @@ import android.util.Log;
 
 public abstract class TransitionScheduler extends BroadcastReceiver {
 
-    static final String TAG = "com.libreshift.transition.TransitionScheduler";
+    static final String TAG = "TransitionScheduler";
     static final String ACTION_ALARM = "com.libreshift.transition.ACTION_ALARM";
     static final String EXTRA_START = "com.libreshift.transition.EXTRA_START";
 

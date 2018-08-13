@@ -8,7 +8,7 @@ import android.util.Log;
 
 public class Transition implements BroadcastReceiver, Animator.AnimatorListener {
 
-    static final String TAG = "com.libreshift.transition.Transition";
+    static final String TAG = "Transition";
 
     private Context context;
     private long startTime;
