@@ -83,7 +83,6 @@ public class Transition extends BroadcastReceiver implements Animator.AnimatorLi
         animator.cancel();
     }
 
-    @Override
     public void onAnimationStart(Animator animation) {
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_OFF);
@@ -91,14 +90,11 @@ public class Transition extends BroadcastReceiver implements Animator.AnimatorLi
         context.registerReceiver(this, filter);
     }
 
-    @Override
     public void onAnimationEnd(Animator animation) {
         context.unregisterReceiver(this);
     }
 
-    @Override
     public void onAnimationCancel(Animator animation) {}
 
-    @Override
     public void onAnimationRepeat(Animator animation) {}
 }
