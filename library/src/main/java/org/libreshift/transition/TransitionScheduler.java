@@ -17,9 +17,9 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
 
     static final String TAG = "TransitionScheduler";
     static final String ACTION_ALARM = "org.libreshift.transition.ACTION_ALARM";
-    static final String IDS = "IDS";
-    static final String START = "_START";
-    static final String DURATION = "_DURATION";
+    private static final String IDS = "IDS";
+    private static final String START = "_START";
+    private static final String DURATION = "_DURATION";
 
     // One hour; override for a different default
     static long DURATION_DEFAULT = 3600000;
@@ -99,7 +99,7 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
         prefs.edit().putStringSet(IDS, ids).remove(id_start).remove(id_duration).apply();
     }
 
-    void reschedule(Context context) {
+    public void reschedule(Context context) {
         SharedPreferences prefs = getPrefs(context);
         Set<String> ids = prefs.getStringSet(IDS, new HashSet<String>());
 
@@ -123,5 +123,5 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
         return context.getSharedPreferences(PREFERENCE, Context.MODE_PRIVATE);
     }
 
-    static final String PREFERENCE = "org.libreshift.transition.preference";
+    private static final String PREFERENCE = "org.libreshift.transition.preference";
 }
