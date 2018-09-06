@@ -28,8 +28,6 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
     // since alarms may be delayed
     abstract void onAlarm(String id, long startTime, long duration);
 
-    // Is UPDATE_CURRENT the right flag? Red Moon was using the constant '0',
-    // which doesn't match the constant of *any* of the PendingIntent flags..
     static final int FLAG = PendingIntent.FLAG_UPDATE_CURRENT;
 
     @Override
@@ -55,13 +53,12 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
 
     // Passing an id of an alarm that is already scheduled will overwrite that alarm
     public void schedule(Context context, String id, long startTime, long duration) {
-        // TODO: If there's already an alarm scheduled, should we return the old time?
-
         long now = System.currentTimeMillis();
         long endTime = startTime + duration;
         if (now >= endTime) {
-            return; // TODO: Should we do anything here?
+            return;
         }
+
         SharedPreferences prefs = getPrefs(context);
         Set<String> ids = new HashSet<>(prefs.getStringSet(IDS, new HashSet<String>()));
         String id_start = id + START;
