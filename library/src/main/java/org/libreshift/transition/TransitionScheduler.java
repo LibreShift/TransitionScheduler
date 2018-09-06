@@ -1,6 +1,5 @@
 package org.libreshift.transition;
 
-import android.animation.ValueAnimator;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -11,21 +10,26 @@ import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public abstract class TransitionScheduler extends BroadcastReceiver {
 
     static final String TAG = "TransitionScheduler";
     static final String ACTION_ALARM = "org.libreshift.transition.ACTION_ALARM";
-    static final String EXTRA_START = "org.libreshift.transition.EXTRA_START";
+    private static final String IDS = "IDS";
+    private static final String START = "_START";
+    private static final String DURATION = "_DURATION";
 
-    abstract ValueAnimator newAnimation(String id);
+    // One hour; override for a different default
+    static long DURATION_DEFAULT = 3600000;
 
-    // Is UPDATE_CURRENT the right flag? Red Moon was using the constant '0',
-    // which doesn't match the constant of *any* of the PendingIntent flags..
+    // It is important to compare the start time to the current time,
+    // since alarms may be delayed
+    abstract void onAlarm(String id, long startTime, long duration);
+
     static final int FLAG = PendingIntent.FLAG_UPDATE_CURRENT;
 
-    // TODO: Store more than one transition at once.
-    Transition transition = null;
-    
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
@@ -33,13 +37,12 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
             switch (action) {
                 case ACTION_ALARM:
                     String id = intent.getDataString();
+                    String id_start = id + START;
+                    String id_duration = id + DURATION;
                     SharedPreferences prefs = getPrefs(context);
-                    long start = prefs.getLong(EXTRA_START, -1);
-                    if (start == -1) {
-                        ValueAnimator animator = newAnimation(id);
-                        transition = new Transition(context, animator, start);
-                        transition.start();
-                    }
+                    long start = prefs.getLong(id_start, System.currentTimeMillis());
+                    long duration = prefs.getLong(id_duration, DURATION_DEFAULT);
+                    onAlarm(id, start, duration);
                     break;
                 case Intent.ACTION_BOOT_COMPLETED:
                     reschedule(context);
@@ -49,20 +52,31 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
     }
 
     // Passing an id of an alarm that is already scheduled will overwrite that alarm
-    public void schedule(Context context, String id, long startAtMillis) {
-        // TODO: If there's already an alarm scheduled, should we return the old time?
+    public void schedule(Context context, String id, long startTime, long duration) {
+        long now = System.currentTimeMillis();
+        long endTime = startTime + duration;
+        if (now >= endTime) {
+            return;
+        }
 
-        // TODO: If startAtMillis is in the past, start the transition right away
         SharedPreferences prefs = getPrefs(context);
-        prefs.edit().putLong(id, startAtMillis).apply();
+        Set<String> ids = new HashSet<>(prefs.getStringSet(IDS, new HashSet<String>()));
+        String id_start = id + START;
+        String id_duration = id + DURATION;
+        ids.add(id);
+        prefs.edit()
+            .putStringSet(IDS, ids)
+            .putLong(id_start, startTime)
+            .putLong(id_duration, duration)
+            .apply();
 
         PendingIntent pi = getIntent(context, id);
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                am.setExact(AlarmManager.RTC_WAKEUP, startAtMillis, pi);
+                am.setExact(AlarmManager.RTC_WAKEUP, startTime, pi);
             } else {
-                am.set(AlarmManager.RTC_WAKEUP, startAtMillis, pi);
+                am.set(AlarmManager.RTC_WAKEUP, startTime, pi);
             }
         }
     }
@@ -75,23 +89,24 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
         }
 
         SharedPreferences prefs = getPrefs(context);
-        prefs.edit().remove(id).apply();
-
-        if (transition != null) {
-            transition.cancel();
-            transition = null;
-        }
+        Set<String> ids = new HashSet<>(prefs.getStringSet(IDS, new HashSet<String>()));
+        ids.remove(id);
+        String id_start = id + START;
+        String id_duration = id + DURATION;
+        prefs.edit().putStringSet(IDS, ids).remove(id_start).remove(id_duration).apply();
     }
 
-    void reschedule(Context context) {
+    public void reschedule(Context context) {
         SharedPreferences prefs = getPrefs(context);
-        for (String id : prefs.getAll().keySet()) {
-            Long startTime = prefs.getLong(id, -1);
-            if (startTime != -1) {
-                schedule(context, id, startTime);
-            } else {
-                Log.e(TAG, "Couldn't get start time for alarm: " + id);
-            }
+        Set<String> ids = prefs.getStringSet(IDS, new HashSet<String>());
+
+        for (String id : ids) {
+            String id_start = id + START;
+            String id_duration = id + DURATION;
+            long startTime = prefs.getLong(id_start, 0);
+            long duration = prefs.getLong(id_duration, DURATION_DEFAULT);
+            cancel(context, id);
+            schedule(context, id, startTime, duration);
         }
     }
 
@@ -105,5 +120,5 @@ public abstract class TransitionScheduler extends BroadcastReceiver {
         return context.getSharedPreferences(PREFERENCE, Context.MODE_PRIVATE);
     }
 
-    static final String PREFERENCE = "org.libreshift.transition.preference";
+    private static final String PREFERENCE = "org.libreshift.transition.preference";
 }
